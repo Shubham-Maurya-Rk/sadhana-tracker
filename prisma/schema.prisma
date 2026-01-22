@@ -1,0 +1,358 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// npx prisma db push
+// npx prisma generate
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  SUPERADMIN
+  MENTOR
+  SADHAK
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+}
+
+// -----------------------------------------------------------
+// 1. USER & ROLE MANAGEMENT
+// -----------------------------------------------------------
+
+// model User {
+//   id       String @id @default(cuid())
+//   email    String @unique
+//   password String // Store Hashed Passwords only!
+//   role     Role   @default(SADHAK)
+
+//   // Basic Profile
+//   name         String
+//   phoneNumber  String?
+//   dateOfBirth  DateTime?
+//   profileImage String?   @db.Text // Use Text for long URLs
+
+//   // Spiritual Background
+//   templeName      String?
+//   bhaktiStartDate DateTime?
+//   isInitiated     Boolean   @default(false)
+//   roundsGoal      Int       @default(16)
+
+//   // Sadhana & Reading
+//   sadhanaLogs    SadhanaLog[]
+//   readingLogs    ReadingLog[]
+//   userBooks      UserBookProgress[]
+//   learnedShlokas ShlokaLearning[]
+
+//   // Mentorship
+//   mentorApplication MentorApplication?
+//   managedGroups     Group[]            @relation("MentorGroups")
+//   joinedGroups      GroupMember[]
+
+//   // Social (Self-relation for following/friends)
+//   following Connection[] @relation("Sender")
+//   followers Connection[] @relation("Receiver")
+
+//   // Communication & Content
+//   messagesSent Message[]
+//   mentorPosts  LearningPost[]
+
+//   createdAt DateTime @default(now())
+// }
+
+// -----------------------------------------------------------
+// 1. USER & ROLE MANAGEMENT
+// -----------------------------------------------------------
+
+model User {
+  id       String @id @default(cuid())
+  email    String @unique
+  password String // Store Hashed Passwords only!
+  role     Role   @default(SADHAK)
+
+  // Basic Profile
+  name         String
+  phoneNumber  String?
+  dateOfBirth  DateTime?
+  profileImage String?   @db.Text // Use Text for long URLs
+
+  // Spiritual Background
+  templeName      String?
+  bhaktiStartDate DateTime?
+  isInitiated     Boolean   @default(false)
+  roundsGoal      Int       @default(16)
+  hearingGoal     Int       @default(20)
+  readingGoal     Int       @default(20)
+  aartisGoal      Int       @default(4)
+
+  // STREAK TRACKING
+  currentStreak   Int       @default(0)
+  highestStreak   Int       @default(0)
+  lastSadhanaDate DateTime? // Add this: tracks the last day a log was completed
+
+  // Activity Relations
+  createdBooks     Book[]             @relation("UserCreatedBooks")
+  sadhanaLogs      SadhanaLog[]
+  bookProgressions UserBookProgress[]
+  shlokaChallenges ShlokaChallenge[]
+
+  // Mentorship & Groups
+  mentorApplication MentorApplication?
+  managedGroups     Group[]            @relation("MentorGroups")
+  joinedGroups      GroupMember[]
+
+  // Social & Permissions
+  // "Following" logic: used to control visibility of Daily Learnings & Profiles
+  following Connection[] @relation("Sender")
+  followers Connection[] @relation("Receiver")
+
+  // Communication & Social Content
+  learningPosts LearningPost[] // Daily Learnings/Stories
+
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  // ADD THESE TWO LINES:
+  sentMentorshipRequests     MentorshipRequest[] @relation("SadhakRequests")
+  receivedMentorshipRequests MentorshipRequest[] @relation("MentorReceivedRequests")
+
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+
+  messages Message[]
+}
+
+model MentorApplication {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt DateTime @default(now())
+}
+
+// -----------------------------------------------------------
+// 2. SADHANA & READING TRACKING
+// -----------------------------------------------------------
+model Book {
+  id           String             @id @default(cuid())
+  title        String
+  author       String?
+  // totalPages moved to UserBookProgress to allow user-specific editions
+  userId       String? // Null for Global
+  createdBy    User?              @relation("UserCreatedBooks", fields: [userId], references: [id])
+  userProgress UserBookProgress[]
+}
+
+enum ProgressType {
+  SHLOKA
+  PAGE
+}
+
+model UserBookProgress {
+  id     String @id @default(cuid())
+  userId String
+  bookId String
+  user   User   @relation(fields: [userId], references: [id])
+  book   Book   @relation(fields: [bookId], references: [id])
+
+  type         ProgressType @default(PAGE)
+  totalUnits   Int          @default(0) // Generic name for Shlokas or Pages
+  currentValue Int          @default(0)
+
+  isCompleted   Boolean   @default(false)
+  currentStreak Int       @default(0)
+  highestStreak Int       @default(0)
+  lastReadDate  DateTime?
+
+  @@unique([userId, bookId])
+}
+
+model SadhanaLog {
+  id     String   @id @default(cuid())
+  date   DateTime // Normalized to UTC midnight
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Daily Reading Aggregate
+  // We only store the total pages read today (across all books)
+  totalRead  Int     @default(0)
+  missedNote String? // Mentor can see this if totalRead is 0
+
+  // Chanting & Lecture
+  chantingRounds  Int @default(0)
+  lectureDuration Int @default(0)
+
+  // Aarti Tracking
+  mangalAarti  Boolean @default(false)
+  darshanAarti Boolean @default(false)
+  bhogaAarti   Boolean @default(false)
+  gauraAarti   Boolean @default(false)
+
+  // Time Tracking
+  wakeUpTime DateTime?
+  sleepTime  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+// -----------------------------------------------------------
+// 3. SHLOKA LISTS (Nested Structure)
+// -----------------------------------------------------------
+model ShlokaChallenge {
+  id          String  @id @default(cuid())
+  title       String // Name of the challenge
+  description String?
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+
+  // Stats
+  currentStreak Int       @default(0)
+  highestStreak Int       @default(0)
+  lastActivity  DateTime?
+
+  shlokas   Shloka[]
+  createdAt DateTime @default(now())
+}
+
+enum ShlokaStatus {
+  NOT_STARTED
+  LEARNING
+  REVISION_NEEDED
+  LEARNED
+}
+
+model Shloka {
+  id          String          @id @default(cuid())
+  challengeId String
+  challenge   ShlokaChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  reference   String // e.g., "Verse 1"
+  content     String       @db.Text
+  translation String?      @db.Text
+  status      ShlokaStatus @default(NOT_STARTED)
+
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------
+// 4. SOCIAL, GROUPS & CHAT
+// -----------------------------------------------------------
+
+model MentorshipRequest {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING") // Or use an enum
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SadhakRequests", fields: [senderId], references: [id])
+  receiver User @relation("MentorReceivedRequests", fields: [receiverId], references: [id])
+
+  @@unique([senderId, receiverId])
+}
+
+model Connection {
+  id         String           @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     ConnectionStatus @default(PENDING)
+
+  sender   User @relation("Sender", fields: [senderId], references: [id])
+  receiver User @relation("Receiver", fields: [receiverId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([senderId, receiverId])
+}
+
+model Group {
+  id        String        @id @default(cuid())
+  name      String
+  mentorId  String
+  mentor    User          @relation("MentorGroups", fields: [mentorId], references: [id])
+  members   GroupMember[]
+  createdAt DateTime      @default(now())
+}
+
+model GroupMember {
+  id      String @id @default(cuid())
+  groupId String
+  userId  String
+  group   Group  @relation(fields: [groupId], references: [id])
+  user    User   @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  subject    String? // New: Essential for "Mail" type
+  content    String   @db.Text
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  isRead     Boolean  @default(false) // New: To show unread mails
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
+}
+
+model LearningPost {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+// -----------------------------------------------------------
+// 5. PUBLIC CONTENT (SUPERADMIN)
+// -----------------------------------------------------------
+enum InspirationCategory {
+  MOTIVATION
+  SHLOKA
+}
+
+enum InspirationType {
+  // Motivation Types
+  JAPA
+  LECTURE
+  BOOK
+  OTHERS
+  // Shloka Types
+  GITA
+  BHAGAVATAM
+  CHAITANYA
+  // (OTHERS is shared)
+}
+
+model DailyInspiration {
+  id        String  @id @default(cuid())
+  text      String  @db.Text
+  author    String  @default("Srila Prabhupada")
+  reference String? // e.g., "BG 2.13" or "Lecture, 1972"
+
+  category    InspirationCategory
+  type        InspirationType
+  sourceLink  String?             @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+
+  // Indices for fast fetching of daily content
+  @@index([category, type])
+}
