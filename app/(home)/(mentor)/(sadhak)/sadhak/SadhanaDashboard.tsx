@@ -11,54 +11,27 @@ import {
     Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-} from "@/components/ui/card";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format } from 'date-fns';
+import { SadhanaLog, SadhanaGoal } from './Calender'; // Ensure paths are correct
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-interface DailyLog {
-    date: string | Date;
-    chantingRounds: number;
-    lectureDuration: number;
-    totalRead: number;
-    mangalAarti: boolean;
-    darshanAarti: boolean;
-    bhogaAarti: boolean;
-    gauraAarti: boolean;
-    sleepTime?: string | Date | null;
-    wakeUpTime?: string | Date | null;
-    missedNote?: string | null;
-}
-
 interface SadhanaData {
-    logs: DailyLog[];
-    goals: {
-        roundsGoal: number;
-        readingGoal: number;
-        hearingGoal: number;
-        aartisGoal?: number; // Added to match your schema logic
-    };
+    logs: SadhanaLog[];
+    goals: SadhanaGoal;
 }
 
 type MetricType = 'chantingRounds' | 'totalRead' | 'lectureDuration' | 'aarti' | 'sleepCycle';
-type RangeType = '7' | '30' | 'all';
 
-const SadhanaDashboard: React.FC<{ data: SadhanaData }> = ({ data }) => {
+interface DashboardProps {
+    data: SadhanaData;
+    activeMonth: Date;
+}
+
+const SadhanaDashboard: React.FC<DashboardProps> = ({ data, activeMonth }) => {
     const [metric, setMetric] = useState<MetricType>('chantingRounds');
-    const [range, setRange] = useState<RangeType>('7');
 
     const getDecimalHour = (timeInput: string | Date | null | undefined) => {
         if (!timeInput) return 0;
@@ -67,24 +40,21 @@ const SadhanaDashboard: React.FC<{ data: SadhanaData }> = ({ data }) => {
     };
 
     const chartData = useMemo(() => {
-        let processedLogs = [...data.logs].sort(
+        // Sort logs chronologically to ensure the bar chart flows correctly
+        const processedLogs = [...data.logs].sort(
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
 
-        if (range !== 'all') {
-            processedLogs = processedLogs.slice(-parseInt(range));
-        }
-
         const labels = processedLogs.map((log) =>
-            new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            new Date(log.date).toLocaleDateString('en-US', { day: 'numeric' })
         );
 
-        // Define Theme Colors
         const THEME = {
-            SUCCESS: 'rgb(34, 197, 94)', // Green-500
-            PENDING: 'rgb(249, 115, 22)', // Orange-500 (Theme Primary)
+            SUCCESS: 'rgb(34, 197, 94)', // Green
+            PENDING: 'rgb(249, 115, 22)', // Orange
         };
 
+        // Handle Sleep Cycle separately as it has two datasets
         if (metric === 'sleepCycle') {
             return {
                 labels,
@@ -92,7 +62,7 @@ const SadhanaDashboard: React.FC<{ data: SadhanaData }> = ({ data }) => {
                     {
                         label: 'Sleep Time',
                         data: processedLogs.map(l => getDecimalHour(l.sleepTime)),
-                        backgroundColor: 'rgba(249, 115, 22, 0.7)', // Orange with opacity
+                        backgroundColor: 'rgba(249, 115, 22, 0.7)',
                         borderRadius: 4,
                     },
                     {
@@ -105,33 +75,27 @@ const SadhanaDashboard: React.FC<{ data: SadhanaData }> = ({ data }) => {
             };
         }
 
-        const getMetricConfig = () => {
-            switch (metric) {
-                case 'chantingRounds':
-                    return { label: 'Rounds', goalKey: 'roundsGoal' };
-                case 'totalRead':
-                    return { label: 'Pages', goalKey: 'readingGoal' };
-                case 'lectureDuration':
-                    return { label: 'Minutes', goalKey: 'hearingGoal' };
-                case 'aarti':
-                    return { label: 'Aartis', goalKey: 'aartisGoal' };
-                default:
-                    return { label: '', goalKey: '' };
-            }
+        // Configuration Mapping with explicit types to prevent 'any' errors
+        const metricConfigs: Record<string, { label: string; goalKey: keyof SadhanaGoal }> = {
+            chantingRounds: { label: 'Rounds', goalKey: 'roundsGoal' },
+            totalRead: { label: 'Pages', goalKey: 'readingGoal' },
+            lectureDuration: { label: 'Minutes', goalKey: 'hearingGoal' },
+            aarti: { label: 'Aartis', goalKey: 'aartisGoal' },
         };
 
-        const config = getMetricConfig();
+        const config = metricConfigs[metric];
 
-        // Calculate values and assign colors based on goals
         const values = processedLogs.map(l => {
             if (metric === 'aarti') {
                 return (l.mangalAarti ? 1 : 0) + (l.darshanAarti ? 1 : 0) + (l.bhogaAarti ? 1 : 0) + (l.gauraAarti ? 1 : 0);
             }
-            return l[metric as keyof DailyLog] as number;
+            // Cast metric to key of SadhanaLog for safe access
+            return (l[metric as keyof SadhanaLog] as number) || 0;
         });
 
         const backgroundColors = values.map(val => {
-            const goal = data.goals[config.goalKey as keyof typeof data.goals] || 0;
+            // Default to 0 if aartisGoal is undefined in the schema
+            const goal = data.goals[config.goalKey] || 0;
             return val >= goal ? THEME.SUCCESS : THEME.PENDING;
         });
 
@@ -141,11 +105,11 @@ const SadhanaDashboard: React.FC<{ data: SadhanaData }> = ({ data }) => {
                 label: config.label,
                 data: values,
                 backgroundColor: backgroundColors,
-                borderRadius: 6,
-                barPercentage: range === 'all' ? 0.8 : 0.6,
+                borderRadius: 4,
+                barPercentage: 0.7,
             }]
         };
-    }, [metric, range, data]);
+    }, [metric, data]);
 
     const chartOptions = {
         responsive: true,
@@ -154,21 +118,22 @@ const SadhanaDashboard: React.FC<{ data: SadhanaData }> = ({ data }) => {
             legend: {
                 display: metric === 'sleepCycle',
                 position: 'top' as const,
-                labels: { usePointStyle: true, boxWidth: 6 }
+                labels: { font: { family: 'inherit', size: 11 }, usePointStyle: true }
             },
             tooltip: {
-                backgroundColor: 'hsl(222.2 84% 4.9%)',
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
                 padding: 12,
-                cornerRadius: 8,
+                titleFont: { size: 14 },
+                bodyFont: { size: 13 },
                 callbacks: {
                     label: (context: any) => {
                         const val = context.raw;
                         if (metric === 'sleepCycle') {
                             const hour = Math.floor(val);
-                            const minutes = Math.round((val - hour) * 60);
+                            const min = Math.round((val - hour) * 60);
                             const ampm = hour >= 12 ? 'PM' : 'AM';
                             const displayHour = hour % 12 || 12;
-                            return `${context.dataset.label}: ${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+                            return `${context.dataset.label}: ${displayHour}:${min.toString().padStart(2, '0')} ${ampm}`;
                         }
                         return `${context.dataset.label}: ${val}`;
                     }
@@ -179,64 +144,56 @@ const SadhanaDashboard: React.FC<{ data: SadhanaData }> = ({ data }) => {
             y: {
                 beginAtZero: true,
                 max: metric === 'sleepCycle' ? 24 : undefined,
-                grid: { color: 'rgba(156, 163, 175, 0.05)' },
+                grid: { color: 'rgba(156, 163, 175, 0.1)' },
                 ticks: {
-                    color: 'rgb(156, 163, 175)',
-                    font: { size: 11 },
-                    callback: (value: any) => metric === 'sleepCycle' ? value + ":00" : value
+                    font: { size: 10 },
+                    callback: (v: any) => metric === 'sleepCycle' ? v + ":00" : v
                 }
             },
             x: {
                 grid: { display: false },
-                ticks: { color: 'rgb(156, 163, 175)', font: { size: 11 } }
+                ticks: { font: { size: 10 } }
             }
         }
     };
 
     return (
-        <Card className="w-full border-none sm:border shadow-none sm:shadow-sm bg-card">
-            <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-7">
+        <Card className="w-full border-zinc-100 dark:border-zinc-800 shadow-xl rounded-[2rem] overflow-hidden bg-white dark:bg-zinc-900">
+            <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-6 border-b border-zinc-50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-800/20">
                 <div className="space-y-1">
-                    <CardTitle className="text-xl font-bold tracking-tight">Sadhana Analysis</CardTitle>
-                    <CardDescription className="flex items-center gap-3">
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-orange-500"></span> Below Goal
+                    <CardTitle className="text-lg font-black italic uppercase tracking-tight">
+                        {format(activeMonth, 'MMMM yyyy')} Analysis
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-3 text-[10px] font-bold uppercase italic tracking-wider">
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
+                            Below Goal
                         </span>
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-green-500"></span> Goal Met
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+                            Goal Met
                         </span>
                     </CardDescription>
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    <Select value={range} onValueChange={(v) => setRange(v as RangeType)}>
-                        <SelectTrigger className="w-full md:w-[130px] h-9">
-                            <SelectValue placeholder="Range" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="7">Last 7 Days</SelectItem>
-                            <SelectItem value="30">Last 30 Days</SelectItem>
-                            <SelectItem value="all">All History</SelectItem>
-                        </SelectContent>
-                    </Select>
-
                     <Select value={metric} onValueChange={(v) => setMetric(v as MetricType)}>
-                        <SelectTrigger className="w-full md:w-[130px] h-9">
-                            <SelectValue placeholder="Metric" />
+                        <SelectTrigger className="w-full md:w-[160px] h-9 rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-bold uppercase italic text-[10px]">
+                            <SelectValue placeholder="Select Metric" />
                         </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="chantingRounds">Chanting</SelectItem>
-                            <SelectItem value="totalRead">Reading</SelectItem>
-                            <SelectItem value="lectureDuration">Hearing</SelectItem>
-                            <SelectItem value="aarti">Aarti</SelectItem>
-                            <SelectItem value="sleepCycle">Sleep Cycle</SelectItem>
+                        <SelectContent className="rounded-xl border-zinc-200 dark:border-zinc-800">
+                            <SelectItem value="chantingRounds" className="text-xs uppercase italic font-bold">Chanting</SelectItem>
+                            <SelectItem value="totalRead" className="text-xs uppercase italic font-bold">Reading</SelectItem>
+                            <SelectItem value="lectureDuration" className="text-xs uppercase italic font-bold">Hearing</SelectItem>
+                            <SelectItem value="aarti" className="text-xs uppercase italic font-bold">Aarti</SelectItem>
+                            <SelectItem value="sleepCycle" className="text-xs uppercase italic font-bold">Sleep Cycle</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
             </CardHeader>
-            <CardContent>
-                <div className="h-[350px] w-full pt-2">
-                    <Bar data={chartData} options={chartOptions as any} />
+            <CardContent className="p-6">
+                <div className="h-[320px] w-full pt-4">
+                    <Bar data={chartData as any} options={chartOptions as any} />
                 </div>
             </CardContent>
         </Card>

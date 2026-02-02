@@ -2,217 +2,234 @@
 
 import * as React from "react"
 import { Calendar } from "@/components/ui/calendar"
-import { format, startOfMonth, endOfMonth } from "date-fns"
+import { format } from "date-fns"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SadhanaDialog } from "./Dialog"
-import { Headphones, MessageSquare, Flame, BookOpen, Loader2, StickyNote } from "lucide-react"
+import {
+  Headphones,
+  MessageSquare,
+  Flame,
+  BookOpen,
+  Loader2,
+  StickyNote,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getMonthlySadhanaAction } from "@/app/actions/sadhana"
 import { toast } from "sonner"
+import SadhanaDashboard from "./SadhanaDashboard"
 
-type SadhanaView = "chanting" | "hearing" | "aartis" | "reading"
-
-interface SadhanaLog {
-    date: Date
-    chantingRounds: number
-    lectureDuration: number
-    totalRead: number
-    mangalAarti: boolean
-    darshanAarti: boolean
-    bhogaAarti: boolean
-    gauraAarti: boolean
-    missedNote: string | null
+// --- Interfaces ---
+export interface SadhanaLog {
+  date: Date
+  chantingRounds: number
+  lectureDuration: number
+  totalRead: number
+  mangalAarti: boolean
+  darshanAarti: boolean
+  bhogaAarti: boolean
+  gauraAarti: boolean
+  sleepTime?: string | Date | null
+  wakeUpTime?: string | Date | null
+  missedNote: string | null
 }
 
-interface SadhanaGoal {
-    roundsGoal: number
-    readingGoal: number
-    hearingGoal: number
+export interface SadhanaGoal {
+  roundsGoal: number
+  readingGoal: number
+  hearingGoal: number
+  aartisGoal?: number
 }
 
 interface CalendarDemoProps {
-    initialData: SadhanaLog[]
-    goals: SadhanaGoal
+  initialData: SadhanaLog[]
+  goals: SadhanaGoal
 }
 
+type SadhanaView = "chanting" | "hearing" | "aartis" | "reading"
+
 export default function CalendarDemo({ initialData, goals }: CalendarDemoProps) {
-    const [selectedDate, setSelectedDate] = React.useState<Date>()
-    const [open, setOpen] = React.useState(false)
-    const [view, setView] = React.useState<SadhanaView>("chanting")
+  const [selectedDate, setSelectedDate] = React.useState<Date>()
+  const [open, setOpen] = React.useState(false)
+  const [view, setView] = React.useState<SadhanaView>("chanting")
+  const [currentMonth, setCurrentMonth] = React.useState<Date>(new Date())
+  const [currentLogs, setCurrentLogs] = React.useState<SadhanaLog[]>(initialData)
+  const [isLoading, setIsLoading] = React.useState(false)
 
-    // Track the month currently being viewed in the calendar
-    const [currentMonth, setCurrentMonth] = React.useState<Date>(new Date())
-    // Store logs for the viewed month
-    const [currentLogs, setCurrentLogs] = React.useState<SadhanaLog[]>(initialData)
-    const [isLoading, setIsLoading] = React.useState(false)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
 
-    // Fetch data whenever currentMonth changes
-    React.useEffect(() => {
-        const fetchMonthData = async () => {
-            // Avoid re-fetching initial data on first load
-            const isInitialMonth =
-                currentMonth.getMonth() === new Date().getMonth() &&
-                currentMonth.getFullYear() === new Date().getFullYear();
+  React.useEffect(() => {
+    const fetchMonthData = async () => {
+      const isInitialMonth =
+        currentMonth.getMonth() === new Date().getMonth() &&
+        currentMonth.getFullYear() === new Date().getFullYear()
 
-            if (isInitialMonth) {
-                setCurrentLogs(initialData);
-                return;
-            }
+      if (isInitialMonth) {
+        setCurrentLogs(initialData)
+        return
+      }
 
-            setIsLoading(true);
-            try {
-                const result = await getMonthlySadhanaAction(currentMonth);
-                if (result?.logs) {
-                    setCurrentLogs(result.logs as any);
-                }
-            } catch (error) {
-                toast.error("Failed to load data for this month");
-            } finally {
-                setIsLoading(false);
-            }
-        };
+      setIsLoading(true)
+      try {
+        const result = await getMonthlySadhanaAction(currentMonth)
+        if (result?.logs) setCurrentLogs(result.logs as any)
+      } catch {
+        toast.error("Failed to load data for this month")
+      } finally {
+        setIsLoading(false)
+      }
+    }
 
-        fetchMonthData();
-    }, [currentMonth, initialData]);
+    fetchMonthData()
+  }, [currentMonth, initialData])
 
-    const logsByDate = React.useMemo(() => {
-        const record: Record<string, SadhanaLog> = {}
-        currentLogs.forEach((log) => {
-            const dateStr = format(new Date(log.date), "yyyy-MM-dd")
-            record[dateStr] = log
-        })
-        return record
-    }, [currentLogs])
+  const logsByDate = React.useMemo(() => {
+    const record: Record<string, SadhanaLog> = {}
+    currentLogs.forEach((log) => {
+      record[format(new Date(log.date), "yyyy-MM-dd")] = log
+    })
+    return record
+  }, [currentLogs])
 
-    const goal = React.useMemo(() => {
-        if (view === "chanting") return goals.roundsGoal;
-        if (view === "hearing") return goals.hearingGoal;
-        if (view === "reading") return goals.readingGoal;
-        return 1;
-    }, [view, goals]);
+  const currentGoal = React.useMemo(() => {
+    if (view === "chanting") return goals.roundsGoal
+    if (view === "reading") return goals.readingGoal
+    if (view === "hearing") return goals.hearingGoal
+    return 1
+  }, [view, goals])
 
-    return (
-        <div className="flex flex-col gap-6 items-center mx-auto p-2 w-full overflow-x-hidden relative">
-            {isLoading && (
-                <div className="absolute inset-0 bg-white/50 dark:bg-black/50 z-10 flex items-center justify-center rounded-xl">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            )}
-
-            <Tabs
-                value={view}
-                onValueChange={(v) => setView(v as SadhanaView)}
-                className="w-full"
-            >
-                <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1">
-                    <TabsTrigger value="chanting" className="gap-2 text-[10px] sm:text-sm">
-                        <MessageSquare className="h-4 w-4" /> Chanting
-                    </TabsTrigger>
-                    <TabsTrigger value="reading" className="gap-2 text-[10px] sm:text-sm">
-                        <BookOpen className="h-4 w-4" /> Reading
-                    </TabsTrigger>
-                    <TabsTrigger value="hearing" className="gap-2 text-[10px] sm:text-sm">
-                        <Headphones className="h-4 w-4" /> Hearing
-                    </TabsTrigger>
-                    <TabsTrigger value="aartis" className="gap-2 text-[10px] sm:text-sm">
-                        <Flame className="h-4 w-4" /> Aartis
-                    </TabsTrigger>
-                </TabsList>
-            </Tabs>
-
-            <div className="w-full max-w-full overflow-x-hidden">
-                <Calendar
-                    mode="single"
-                    disabled={(date) => date > today}
-                    month={currentMonth}
-                    onMonthChange={setCurrentMonth} // This triggers our useEffect
-                    selected={selectedDate}
-                    onSelect={(date) => {
-                        if (date && date > today) return;
-                    }}
-                    onDayClick={(date) => {
-                        if (!date) return
-                        setOpen(true)
-                        setSelectedDate(date)
-                    }}
-                    className="rounded-lg border w-full"
-                    classNames={{
-                        day: "h-11 w-11 p-0 text-sm sm:h-14 sm:w-14",
-                        head_cell: "w-11 text-[0.75rem] sm:w-14",
-                    }}
-                    components={{
-                        DayButton: ({ day, modifiers, ...props }) => {
-                            const dateStr = format(day.date, "yyyy-MM-dd")
-                            const log = logsByDate[dateStr]
-
-                            let numericValue = 0
-                            if (log) {
-                                if (view === "chanting") numericValue = log.chantingRounds || 0
-                                else if (view === "reading") numericValue = log.totalRead || 0
-                                else if (view === "hearing") numericValue = log.lectureDuration || 0
-                                else if (view === "aartis") {
-                                    numericValue = [log.mangalAarti, log.darshanAarti, log.bhogaAarti, log.gauraAarti].filter(Boolean).length
-                                }
-                            }
-
-                            const getDayColor = () => {
-                                if (!log) return ""
-                                if (numericValue === 0) return "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400"
-                                if (numericValue < goal) return "bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400"
-                                if (numericValue === goal) return "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-                                return "bg-emerald-200 text-emerald-900 dark:bg-emerald-500/30 dark:text-emerald-200"
-                            }
-
-                            const displayLabel = view === "hearing" ? `${numericValue}m` : numericValue
-
-                            return (
-                                <button
-                                    {...props}
-                                    className={cn(
-                                        "relative flex flex-col items-center justify-center w-full h-full rounded-xl transition-all border-2 border-transparent",
-                                        modifiers.selected && "border-primary bg-primary/5",
-                                        log && getDayColor(),
-                                        !log && "hover:bg-accent",
-                                        modifiers.outside && "opacity-20 grayscale"
-                                    )}
-                                >
-                                    {/* Note Indicator for Reading Tab */}
-                                    {view === "reading" && log?.missedNote && (
-                                        <div className="absolute top-1 right-1">
-                                            <StickyNote className="h-2 w-2 sm:h-3 sm:w-3 text-current opacity-70" />
-                                        </div>
-                                    )}
-
-                                    {log && (
-                                        <span className="text-xs sm:text-lg font-bold leading-none mb-1">
-                                            {displayLabel}
-                                        </span>
-                                    )}
-
-                                    <span className={cn(
-                                        "absolute bottom-1 left-1 text-[8px] sm:text-[10px] font-semibold opacity-50",
-                                        modifiers.today && "text-primary opacity-100 underline underline-offset-2"
-                                    )}>
-                                        {format(day.date, "d")}
-                                    </span>
-                                </button>
-                            )
-                        }
-                    }}
-                />
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
+      {/* LEFT: Calendar */}
+      <div className="lg:col-span-5 flex justify-center lg:sticky lg:top-24">
+        <div className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-4 sm:p-6 shadow-xl border border-zinc-100 dark:border-zinc-800">
+          {isLoading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/60 dark:bg-black/60 rounded-3xl">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
+          )}
 
-            {selectedDate && (
-                <SadhanaDialog
-                    key={selectedDate.toISOString()}
-                    open={open}
-                    setOpen={setOpen}
-                    selectedDate={selectedDate}
-                    goals={goals}
-                />
-            )}
+          <h3 className="text-center font-black uppercase italic text-[10px] tracking-[0.3em] mb-4 text-zinc-400">
+            Sadhana Tracking
+          </h3>
+
+          <Tabs value={view} onValueChange={(v) => setView(v as SadhanaView)}>
+            <TabsList className="grid grid-cols-4 mb-4">
+              <TabsTrigger value="chanting" className="gap-1 text-xs">
+                <MessageSquare className="h-3 w-3" /> Japa
+              </TabsTrigger>
+              <TabsTrigger value="reading" className="gap-1 text-xs">
+                <BookOpen className="h-3 w-3" /> Read
+              </TabsTrigger>
+              <TabsTrigger value="hearing" className="gap-1 text-xs">
+                <Headphones className="h-3 w-3" /> Hear
+              </TabsTrigger>
+              <TabsTrigger value="aartis" className="gap-1 text-xs">
+                <Flame className="h-3 w-3" /> Aarti
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <Calendar
+            mode="single"
+            month={currentMonth}
+            onMonthChange={setCurrentMonth}
+            selected={selectedDate}
+            disabled={(date) => date > today}
+            onDayClick={(date) => {
+              if (!date || date > today) return
+              setSelectedDate(date)
+              setOpen(true)
+            }}
+            className="w-full"
+            classNames={{
+              head_row: "grid grid-cols-7 mb-2",
+              head_cell:
+                "text-center text-[10px] sm:text-xs uppercase italic font-bold text-zinc-500",
+              row: "grid grid-cols-7 gap-1",
+              cell: "flex justify-center",
+              day: "w-full aspect-square",
+            }}
+            components={{
+              DayButton: ({ day, modifiers, ...props }) => {
+                const dateStr = format(day.date, "yyyy-MM-dd")
+                const log = logsByDate[dateStr]
+
+                let value = 0
+                if (log) {
+                  if (view === "chanting") value = log.chantingRounds
+                  else if (view === "reading") value = log.totalRead
+                  else if (view === "hearing") value = log.lectureDuration
+                  else {
+                    value = [
+                      log.mangalAarti,
+                      log.darshanAarti,
+                      log.bhogaAarti,
+                      log.gauraAarti,
+                    ].filter(Boolean).length
+                  }
+                }
+
+                const color =
+                  !log
+                    ? ""
+                    : value === 0
+                    ? "bg-red-100 text-red-700 dark:bg-red-500/10"
+                    : value < currentGoal
+                    ? "bg-orange-100 text-orange-700 dark:bg-orange-500/10"
+                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10"
+
+                return (
+                  <button
+                    {...props}
+                    className={cn(
+                      "relative flex flex-col items-center justify-center w-full aspect-square rounded-xl transition active:scale-95",
+                      color,
+                      modifiers.selected &&
+                        "ring-2 ring-primary ring-offset-2",
+                      modifiers.today && "border border-primary",
+                      modifiers.outside &&
+                        "opacity-20 pointer-events-none"
+                    )}
+                  >
+                    {view === "reading" && log?.missedNote && (
+                      <StickyNote className="absolute top-1 right-1 h-3 w-3 opacity-70" />
+                    )}
+
+                    {log && (
+                      <span className="text-xs sm:text-sm font-bold">
+                        {view === "hearing" ? `${value}m` : value}
+                      </span>
+                    )}
+
+                    <span className="absolute bottom-1 left-1 text-[9px] opacity-60">
+                      {format(day.date, "d")}
+                    </span>
+                  </button>
+                )
+              },
+            }}
+          />
         </div>
-    )
+      </div>
+
+      {/* RIGHT: Dashboard */}
+      <div className="lg:col-span-7 w-full">
+        <SadhanaDashboard
+          data={{ logs: currentLogs, goals }}
+          activeMonth={currentMonth}
+        />
+      </div>
+
+      {selectedDate && (
+        <SadhanaDialog
+          key={selectedDate.toISOString()}
+          open={open}
+          setOpen={setOpen}
+          selectedDate={selectedDate}
+          goals={goals}
+        />
+      )}
+    </div>
+  )
 }

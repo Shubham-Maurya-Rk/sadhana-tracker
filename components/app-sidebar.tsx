@@ -128,7 +128,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [mounted, setMounted] = useState(false)
   const { data: session, status } = useSession()
   const role = session?.user?.role;
-  console.log(role)
   useEffect(() => {
     setMounted(true)
   }, [])
