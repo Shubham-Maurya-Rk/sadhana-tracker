@@ -224,6 +224,10 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
                         type={showPassword ? "text" : "password"}
                         className="pr-10"
                         {...field}
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck="false"
                       />
                       <Button
                         type="button"
@@ -258,6 +262,10 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
                         placeholder="••••••••"
                         type={showConfirmPassword ? "text" : "password"}
                         className="pr-10"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck="false"
                         {...field}
                       />
                       <Button

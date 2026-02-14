@@ -141,6 +141,10 @@ export function LoginForm({
                           {...field}
                           type={showPassword ? "text" : "password"}
                           className="pr-10" // Add padding to the right so text doesn't overlap the icon
+                          autoComplete="new-password"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck="false"
                         />
                         <Button
                           type="button"
