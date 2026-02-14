@@ -10,7 +10,7 @@ export function AppleCardsCarousel({ id }: { id: string }) {
   return (
     <div className="w-full max-w-full relative overflow-hidden sm:pb-20 md:py-20" id={id}>
       <h2 className="max-w-7xl pl-4 mx-auto text-xl md:text-5xl font-bold text-neutral-800 dark:text-neutral-200 font-sans">
-        Get to know your iSad.
+        Web App Screenshots
       </h2>
       <Carousel items={cards} />
     </div>
