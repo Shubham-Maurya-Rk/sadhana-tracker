@@ -91,14 +91,14 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-center gap-2 group cursor-pointer shrink-0 mb-8">
+          <Link href="/" className="flex items-center justify-center gap-2 group cursor-pointer shrink-0 mb-8">
             <div className="bg-orange-600 p-1.5 rounded-lg shadow-lg shadow-orange-500/30 group-hover:rotate-12 transition-transform">
               <Flower2 className="h-5 w-5 text-white" />
             </div>
             <span className="font-bold text-3xl tracking-tight bg-gradient-to-br from-stone-900 to-stone-600 dark:from-stone-100 dark:to-stone-400 bg-clip-text text-transparent">
               SadhnaTrk
             </span>
-          </div>
+          </Link>
           <CardTitle>Login to your account</CardTitle>
           <CardDescription>
             Enter your email below to login to your account
